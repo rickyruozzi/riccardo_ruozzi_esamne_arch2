@@ -1,16 +1,16 @@
 module smart_gate_controller(
     input wire clk_i, 
-    input wire reset_i, 
+    input wire reset_ni, 
     input wire car_i,
     input wire pay_ok_i,
     input wire clear_i,
     input wire cnt_reset_i,
     output reg gate_open_o,
     output reg gate_close_o,
-    output reg L_red_o,
-    output reg L_yellow_o, 
-    output reg L_green_o,
-    output reg [7:0] car_count__o
+    output reg red_o,
+    output reg yellow_o, 
+    output reg green_o,
+    output reg [7:0] car_count_o
 );
     // Stati della FSM
     localparam waiting = 3'b000; 
@@ -27,22 +27,22 @@ module smart_gate_controller(
     initial begin
         gate_open_o = 0;
         gate_close_o = 1;
-        L_green_o = 0;
-        L_yellow_o = 0;
-        L_red_o = 1;
+        green_o = 0;
+        yellow_o = 0;
+        red_o = 1;
         car_count = 0;
         timer = 0;
         cs = waiting;
     end
 
     // Logica sequenziale
-    always @(posedge clk_i or negedge reset_i) begin 
-        if (!reset_i) begin // reset attivo basso
+    always @(posedge clk_i or negedge reset_ni) begin 
+        if (!reset_ni) begin // reset attivo basso
             gate_open_o <= 0;
             gate_close_o <= 1;
-            L_green_o <= 0;
-            L_yellow_o <= 0;
-            L_red_o <= 1;
+            green_o <= 0;
+            yellow_o <= 0;
+            red_o <= 1;
             timer <= 0;
             cs <= waiting;
             car_count <= 0;
@@ -66,14 +66,14 @@ module smart_gate_controller(
         
         gate_open_o = 0;
         gate_close_o = 0;
-        L_red_o = 0;
-        L_yellow_o = 0;
-        L_green_o = 0;
+        red_o = 0;
+        yellow_o = 0;
+        green_o = 0;
 
         case(cs)
             waiting: begin
                 gate_close_o = 1;
-                L_red_o = 1;
+                red_o = 1;
                 next_timer = 2'b00;
                 
                 if(car_i && pay_ok_i) begin 
@@ -82,7 +82,7 @@ module smart_gate_controller(
             end
             
             pre_opening: begin
-                L_yellow_o = 1;
+                yellow_o = 1;
                 
                 if(timer == 2'd2) begin 
                     ns = opening;
@@ -94,7 +94,7 @@ module smart_gate_controller(
             
             opening: begin
                 if(clear_i) begin 
-                    L_green_o = 1;
+                    green_o = 1;
                     gate_open_o = 1;
                     
                     if(timer == 2'd1) begin 
@@ -109,7 +109,7 @@ module smart_gate_controller(
             end
             
             open: begin
-                L_green_o = 1;
+                green_o = 1;
                 
                 if(timer == 2'd3) begin 
                     ns = closing;
@@ -120,7 +120,7 @@ module smart_gate_controller(
             end
             
             closing: begin
-                L_yellow_o = 1;
+                yellow_o = 1;
                 gate_close_o = 1;
                 
                 // Incrementa contatore auto quando si chiude
@@ -143,7 +143,7 @@ module smart_gate_controller(
     end
 
     always @(*) begin
-        car_count__o = car_count;
+        car_count_o = car_count;
     end
 
 endmodule
