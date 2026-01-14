@@ -36,10 +36,16 @@ module smart_gate_controller(
     reg [1:0] timer, next_timer; //timer per i cicli
 
     reg [7:0] car_count_next;
+    reg [8:0] temp;
+
+    temp = 1;
 
     always @(posedge clk or negedge reset) begin 
         if(cnt_reset_i) begin
-            car_count__o = 0;
+            car_count__o <= 0;
+        end
+        else begin 
+            car_count__o <= car_count_next;
         end
         if (!reset_i) //reset attivo basso e se l'operazione è effettuabile
         begin
@@ -107,7 +113,9 @@ module smart_gate_controller(
                     end
                 end
                 closing : begin //logica di closing
+                    if(!temp[8]) begin
                     car_count_next = car_count+ 2'd1;
+                    end
                     L_green_o = 0;
                     L_yellow_o = 1;
                     gate_close_o =1;
