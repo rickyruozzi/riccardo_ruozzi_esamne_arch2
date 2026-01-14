@@ -12,120 +12,138 @@ module smart_gate_controller(
     output reg L_green_o,
     output reg [7:0] car_count__o
 );
-    //inizializziamo i valori
-    pay_ok_i = 0; 
-    car_i = 0; 
-    clear_i = 0;
-    gate_open_o =0;
-    gate_close = 1;
-    L_green_o = 0;
-    L_yellow_o = 0;
-    L_red_o = 1;
-    car_count = 0;
-    timer = 0;
-
-    //stati della FSM
+    // Stati della FSM
     localparam waiting = 3'b000; 
     localparam pre_opening = 3'b001;
     localparam opening = 3'b010;
     localparam open = 3'b011; 
     localparam closing = 3'b100;
 
-    reg [2:0] cs,ns; //ci serviremo di 3 bit per gli stati
+    reg [2:0] cs, ns; // current e next state
+    reg [1:0] timer, next_timer; // timer conta-cicli
+    reg [7:0] car_count, car_count_next;
 
-    reg [1:0] timer, next_timer; //timer per i cicli
+    // Inizializzazione
+    initial begin
+        gate_open_o = 0;
+        gate_close_o = 1;
+        L_green_o = 0;
+        L_yellow_o = 0;
+        L_red_o = 1;
+        car_count = 0;
+        timer = 0;
+        cs = waiting;
+    end
 
-    reg [7:0] car_count_next;
-    reg [8:0] temp;
-
-    temp = 1;
-
-    always @(posedge clk or negedge reset) begin 
-        if(cnt_reset_i) begin
-            car_count__o <= 0;
-        end
-        else begin 
-            car_count__o <= car_count_next;
-        end
-        if (!reset_i) //reset attivo basso e se l'operazione è effettuabile
-        begin
-            pay_ok_i <= 0; //reset dei valori al default
-            car_i <= 0; 
-            clear_i <= 0;
-            gate_open_o <=0;
-            gate_close <= 1;
+    // Logica sequenziale
+    always @(posedge clk_i or negedge reset_i) begin 
+        if (!reset_i) begin // reset attivo basso
+            gate_open_o <= 0;
+            gate_close_o <= 1;
             L_green_o <= 0;
             L_yellow_o <= 0;
             L_red_o <= 1;
-            car_count <= 0;
             timer <= 0;
-            cs <= waiting; 
+            cs <= waiting;
+            car_count <= 0;
         end
-        else 
-        begin
-            cs <= ns; //aggiorniamo lo stato in corrispondenza del clk
-            timer <= next_timer; //incremento del timer
-        end
-
-        always @(*) //transizione degli stati
-        begin 
-            ns = cs;
-            next_timer = timer; //di default ns e next_timer restano invariati
-
-            case(cs)
-                waiting : begin  //logica del waiting
-                    next_timer=2'b00;
-                    L_green_o = 0;
-                    L_red_o = 1;
-                    if(car_i and pay_ok_i) begin 
-                        ns = pre_opening; 
-                        gate_close_o=1;
-                    end
-                end
-                pre_opening : begin //logica del pre_opening
-                    L_red_o=0;
-                    L_yellow_o=1;
-                    if(timer==2'd2) begin 
-                        ns = opening; 
-                    end
-                    next_timer = timer + 2'd1;
-                end
-                opening: begin //logica dell'opening
-                    if(clear_i) begin 
-                        L_yellow = 0;
-                        L_green_o = 1;
-                        gate_open_o = 1;
-                        if (timer == 2'd1) begin 
-                            ns = open; 
-                        end else begin 
-                            next_timer = timer + 2'd1;
-                        end
-                    end
-                end
-                open : begin //logica di open
-                    clear_i=0;
-                    gate_open_o=0;
-                    L_green_o=1; //teoricamente lo era ancora dallo stato precedente
-                    if(timer == 2'd3) begin 
-                        ns = closing;
-                    end else begin 
-                        next_timer = timer + 2'd1;
-                    end
-                end
-                closing : begin //logica di closing
-                    if(!temp[8]) begin
-                    car_count_next = car_count+ 2'd1;
-                    end
-                    L_green_o = 0;
-                    L_yellow_o = 1;
-                    gate_close_o =1;
-                    if(timer == 2'd1) begin 
-                        ns = waiting;
-                    end
-                    else begin
-                        next_timer = timer + 2'd1;
-                     end
-                end
+        else begin
+            cs <= ns; 
+            timer <= next_timer; 
+            car_count <= car_count_next; 
+            if (cnt_reset_i) begin
+                car_count <= 0;
+            end
         end
     end
+
+    // Logica combinatoria 
+    always @(*) begin 
+        // Valori di default
+        ns = cs;
+        next_timer = timer;
+        car_count_next = car_count;
+        
+        gate_open_o = 0;
+        gate_close_o = 0;
+        L_red_o = 0;
+        L_yellow_o = 0;
+        L_green_o = 0;
+
+        case(cs)
+            waiting: begin
+                gate_close_o = 1;
+                L_red_o = 1;
+                next_timer = 2'b00;
+                
+                if(car_i && pay_ok_i) begin 
+                    ns = pre_opening;
+                end
+            end
+            
+            pre_opening: begin
+                L_yellow_o = 1;
+                
+                if(timer == 2'd2) begin 
+                    ns = opening;
+                    next_timer = 0;
+                end else begin
+                    next_timer = timer + 1;
+                end
+            end
+            
+            opening: begin
+                if(clear_i) begin 
+                    L_green_o = 1;
+                    gate_open_o = 1;
+                    
+                    if(timer == 2'd1) begin 
+                        ns = open;
+                        next_timer = 0;
+                    end else begin 
+                        next_timer = timer + 1;
+                    end
+                end else begin
+                    ns = opening;
+                end
+            end
+            
+            open: begin
+                L_green_o = 1;
+                
+                if(timer == 2'd3) begin 
+                    ns = closing;
+                    next_timer = 0;
+                end else begin 
+                    next_timer = timer + 1;
+                end
+            end
+            
+            closing: begin
+                L_yellow_o = 1;
+                gate_close_o = 1;
+                
+                // Incrementa contatore auto quando si chiude
+                if(timer == 2'd0) begin
+                    car_count_next = car_count + 1;
+                end
+                
+                if(timer == 2'd1) begin 
+                    ns = waiting;
+                    next_timer = 0;
+                end else begin
+                    next_timer = timer + 1;
+                end
+            end
+            
+            default: begin
+                ns = waiting;
+            end
+        endcase
+    end
+
+    always @(*) begin
+        car_count__o = car_count;
+    end
+
 endmodule
